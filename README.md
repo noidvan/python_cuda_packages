@@ -11,6 +11,9 @@ export PATH=/usr/local/cuda-12.6/bin:$PATH
 export CUDA_HOME=/usr/local/cuda-12.6
 ```
 
-To install a package, use `pip3 install .` in the corresponding folder.
+To install a package:
+```bash
+pip3 install "git+https://github.com/noidvan/python_cuda_packages.git@master#egg=<package_name>&subdirectory=<folder_name>"
+```
 
 Credit to original code authors.
