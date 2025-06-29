@@ -6,7 +6,7 @@ import os
 from setuptools import setup, find_packages
 from torch.utils.cpp_extension import BuildExtension, CUDAExtension
 
-src_dir = 'src/attn'
+src_dir = 'Swin3D/src/attn'
 src_files = [os.path.join(src_dir, _f) for _f in os.listdir(src_dir) if 
     os.path.splitext(_f)[1] in ['.cu', '.cpp']]
 
@@ -17,16 +17,16 @@ setup(
         CUDAExtension(
             name='Swin3D.sparse_dl.attn_cuda',
             sources=src_files,
-            extra_compile_args={'cxx': ['-g'],
-                                'nvcc': ['-O2']}),
+            extra_compile_args={'cxx': ['-O3'],
+                                'nvcc': ["-O3", "-Xcompiler=-fno-gnu-unique"]}),
         CUDAExtension(
             name='Swin3D.sparse_dl.knn_cuda',
             sources=[
-                'src/knn/knn_api.cpp',
-                'src/knn/knn_cuda_kernel.cu'],
-            extra_compile_args={'cxx': ['-g'],
-                                'nvcc': ['-O2']}),
+                'Swin3D/src/knn/knn_api.cpp',
+                'Swin3D/src/knn/knn_cuda_kernel.cu'],
+            extra_compile_args={'cxx': ["-O3"],
+                                'nvcc': ["-O3", "-Xcompiler=-fno-gnu-unique"]}),
     ],
     cmdclass={
-        'build_ext': BuildExtension
+        'build_ext': BuildExtension.with_options(use_ninja=True)
     })
