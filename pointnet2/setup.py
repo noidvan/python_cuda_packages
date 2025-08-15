@@ -14,7 +14,7 @@ _ext_headers = glob.glob("{}/include/*".format(_ext_src_root))
 
 requirements = ["torch>=1.4"]
 
-os.environ["TORCH_CUDA_ARCH_LIST"] = "7.0;8.0;8.6;8.7;8.9;9.0"
+# os.environ["TORCH_CUDA_ARCH_LIST"] = "7.0;8.0;8.6;8.7;8.9;9.0"
 
 exec(open("_version.py").read())
 

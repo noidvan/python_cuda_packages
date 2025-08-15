@@ -138,7 +138,7 @@ CUDA_HOME, argv = _argparse("--cuda_home", argv, False)
 BLAS, argv = _argparse("--blas", argv, False)
 BLAS_INCLUDE_DIRS, argv = _argparse("--blas_include_dirs", argv, False, is_list=True)
 BLAS_LIBRARY_DIRS, argv = _argparse("--blas_library_dirs", argv, False, is_list=True)
-MAX_COMPILATION_THREADS = 20
+MAX_COMPILATION_THREADS = 10
 
 Extension = CUDAExtension
 extra_link_args = []
@@ -146,6 +146,19 @@ include_dirs = []
 libraries = []
 CC_FLAGS = []
 NVCC_FLAGS = []
+
+# Add CCCL include path for CUDA 13 compatibility
+if CUDA_HOME:
+    cccl_include_path = os.path.join(CUDA_HOME, "targets", "x86_64-linux", "include", "cccl")
+    if os.path.exists(cccl_include_path):
+        include_dirs.append(cccl_include_path)
+else:
+    # Try common CUDA installation paths
+    for cuda_path in ["/usr/local/cuda", "/usr/local/cuda-13.0"]:
+        cccl_path = os.path.join(cuda_path, "targets", "x86_64-linux", "include", "cccl")
+        if os.path.exists(cccl_path):
+            include_dirs.append(cccl_path)
+            break
 
 if CPU_ONLY:
     print("--------------------------------")

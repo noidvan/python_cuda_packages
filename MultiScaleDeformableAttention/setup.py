@@ -22,7 +22,7 @@ from setuptools import find_packages
 from setuptools import setup
 
 requirements = ["torch", "torchvision"]
-os.environ["TORCH_CUDA_ARCH_LIST"] = "7.0;8.0;8.6;8.7;8.9;9.0"
+# os.environ["TORCH_CUDA_ARCH_LIST"] = "7.0;8.0;8.6;8.7;8.9;9.0"
 
 def get_extensions():
     this_dir = os.path.dirname(os.path.abspath(__file__))
