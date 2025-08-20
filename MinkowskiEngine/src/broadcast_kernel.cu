@@ -241,7 +241,8 @@ void BroadcastBackwardKernelGPU(
   // cusparseSetMatIndexBase(descr, CUSPARSE_INDEX_BASE_ZERO);
 
   // Sort COO first
-  THRUST_CHECK(thrust::sort_by_key(d_out_map,       // key begin
+  THRUST_CHECK(thrust::sort_by_key(thrust::device,  //
+                                   d_out_map,       // key begin
                                    d_out_map + nnz, // key end
                                    d_in_map         // value begin
                                    ));

@@ -314,7 +314,8 @@ public:
     LOG_DEBUG("Decomposing", kernels.end() - kernels.begin(), "elements");
     // the memory space must be initialized first!
     // sort
-    THRUST_CHECK(thrust::sort_by_key(kernels.begin(),           // key begin
+    THRUST_CHECK(thrust::sort_by_key(thrust::device,            //
+                                     kernels.begin(),           // key begin
                                      kernels.end(),             // key end
                                      thrust::make_zip_iterator( // value begin
                                          thrust::make_tuple(    //
@@ -360,6 +361,7 @@ public:
 
     try {
       auto end = thrust::reduce_by_key(
+          thrust::device,  // policy
           kernels.begin(), // key begin
           kernels.end(),   // key end
           thrust::make_zip_iterator(

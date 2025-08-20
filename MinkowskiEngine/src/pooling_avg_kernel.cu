@@ -214,7 +214,8 @@ void NonzeroAvgPoolingForwardKernelGPU(
   CUDA_CHECK(cudaMemcpy(sorted_col_ptr, kernel_map.in_maps.begin(),
                         sparse_nnzs * sizeof(Itype), cudaMemcpyDeviceToDevice));
 
-  THRUST_CHECK(thrust::sort_by_key(sorted_row_ptr,               // key begin
+  THRUST_CHECK(thrust::sort_by_key(thrust::device,               //
+                                   sorted_row_ptr,               // key begin
                                    sorted_row_ptr + sparse_nnzs, // key end
                                    sorted_col_ptr));
 
@@ -281,7 +282,8 @@ void NonzeroAvgPoolingForwardKernelGPU(
     // reduce by key
     int num_unique_keys;
     try {
-      auto end = thrust::reduce_by_key(sorted_row_ptr, // key begin
+      auto end = thrust::reduce_by_key(thrust::device, // policy
+                                       sorted_row_ptr, // key begin
                                        sorted_row_ptr + sparse_nnzs, // key end
                                        d_ones,         // value begin
                                        unique_row_ptr, // key out begin

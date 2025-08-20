@@ -17,3 +17,5 @@ pip3 install "git+https://github.com/noidvan/python_cuda_packages.git@master#egg
 ```
 
 Credit to original code authors.
+
+MinkowskiEngine used in this repo was developed by [NVIDIA](https://github.com/NVIDIA/MinkowskiEngine.git) and forked by [CiSong10](https://github.com/CiSong10/MinkowskiEngine.git) for CUDA 12 support.

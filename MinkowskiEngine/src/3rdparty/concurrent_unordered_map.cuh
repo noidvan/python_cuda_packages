@@ -17,7 +17,7 @@
 #ifndef CONCURRENT_UNORDERED_MAP_CUH
 #define CONCURRENT_UNORDERED_MAP_CUH
 
-#include <nvtx3/nvToolsExt.h>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <hash/hash_allocator.cuh>
 #include <hash/helper_functions.cuh>
 #include <hash/managed.cuh>
@@ -27,6 +27,7 @@
 
 #include <thrust/pair.h>
 #include <thrust/count.h>
+#include <thrust/execution_policy.h>
 
 #include <functional>
 #include <memory>
@@ -169,42 +170,25 @@ class concurrent_unordered_map {
    * storage
    * @param stream CUDA stream to use for device operations.
    **/
-  // static auto create(size_type capacity,
-  //                    const mapped_type unused_element = std::numeric_limits<mapped_type>::max(),
-  //                    const key_type unused_key        = std::numeric_limits<key_type>::max(),
-  //                    const Hasher& hash_function      = hasher(),
-  //                    const Equality& equal            = key_equal(),
-  //                    const allocator_type& allocator  = allocator_type(),
-  //                    cudaStream_t stream              = 0)
-  // {
-  //   using Self = concurrent_unordered_map<Key, Element, Hasher, Equality, Allocator>;
-
-  //   // Note: need `(*p).destroy` instead of `p->destroy` here
-  //   // due to compiler bug: https://github.com/rapidsai/cudf/pull/5692
-  //   auto deleter = [stream](Self* p) { (*p).destroy(stream); };
-
-  //   return std::unique_ptr<Self, std::function<void(Self*)>>{
-  //     new Self(capacity, unused_element, unused_key, hash_function, equal, allocator, stream),
-  //     deleter};
-  // }
-
-  static std::shared_ptr<concurrent_unordered_map> create(size_type capacity,
-                                                          const mapped_type unused_element = std::numeric_limits<mapped_type>::max(),
-                                                          const key_type    unused_key     = std::numeric_limits<key_type>::max(),
-                                                          const Hasher&     hash_function  = Hasher(),
-                                                          const Equality&   equal          = Equality(),
-                                                          const Allocator&  allocator      = Allocator(),
-                                                          cudaStream_t      stream         = 0)
+  static auto create(size_type capacity,
+                     const mapped_type unused_element = std::numeric_limits<mapped_type>::max(),
+                     const key_type unused_key        = std::numeric_limits<key_type>::max(),
+                     const Hasher& hash_function      = hasher(),
+                     const Equality& equal            = key_equal(),
+                     const allocator_type& allocator  = allocator_type(),
+                     cudaStream_t stream              = 0)
   {
-    using Self = concurrent_unordered_map<Key,Element,Hasher,Equality,Allocator>;
-    auto deleter = [stream](Self* p) {
-      // this will free the hash‐table storage and then delete the object
-      p->destroy(stream);
-    };
-    return std::shared_ptr<Self>( new Self(capacity, unused_element, unused_key, hash_function, equal, allocator, stream),
-                                deleter );
-  }
+    CUDF_FUNC_RANGE();
+    using Self = concurrent_unordered_map<Key, Element, Hasher, Equality, Allocator>;
 
+    // Note: need `(*p).destroy` instead of `p->destroy` here
+    // due to compiler bug: https://github.com/rapidsai/cudf/pull/5692
+    auto deleter = [stream](Self* p) { (*p).destroy(stream); };
+
+    return std::unique_ptr<Self, std::function<void(Self*)>>{
+      new Self(capacity, unused_element, unused_key, hash_function, equal, allocator, stream),
+      deleter};
+  }
 
   /**
    * @brief Returns an iterator to the first element in the map
@@ -517,7 +501,7 @@ class concurrent_unordered_map {
 
   size_t size() const
   {
-    return thrust::count_if(m_hashtbl_values, m_hashtbl_values + m_capacity,
+    return thrust::count_if(thrust::device, m_hashtbl_values, m_hashtbl_values + m_capacity,
                             _is_used<Key, Element, Equality>(get_unused_key(), get_key_equal()));
   }
 
@@ -527,16 +511,10 @@ class concurrent_unordered_map {
     cudaError_t status = cudaPointerGetAttributes(&hashtbl_values_ptr_attributes, m_hashtbl_values);
 
     if (cudaSuccess == status && isPtrManaged(hashtbl_values_ptr_attributes)) {
-      cudaMemLocation location;
-      location.type = cudaMemLocationTypeDevice;
-      location.id = dev_id;
       CUDA_TRY(
-        cudaMemPrefetchAsync(m_hashtbl_values, m_capacity * sizeof(value_type), location, 0, stream));
+        cudaMemPrefetchAsync(m_hashtbl_values, m_capacity * sizeof(value_type), dev_id, stream));
     }
-    cudaMemLocation location;
-    location.type = cudaMemLocationTypeDevice;
-    location.id = dev_id;
-    CUDA_TRY(cudaMemPrefetchAsync(this, sizeof(*this), location, 0, stream));
+    CUDA_TRY(cudaMemPrefetchAsync(this, sizeof(*this), dev_id, stream));
 
     return GDF_SUCCESS;
   }
@@ -608,11 +586,8 @@ class concurrent_unordered_map {
       if (cudaSuccess == status && isPtrManaged(hashtbl_values_ptr_attributes)) {
         int dev_id = 0;
         CUDA_TRY(cudaGetDevice(&dev_id));
-        cudaMemLocation location;
-        location.type = cudaMemLocationTypeDevice;
-        location.id = dev_id;
         CUDA_TRY(
-          cudaMemPrefetchAsync(m_hashtbl_values, m_capacity * sizeof(value_type), location, 0, stream));
+          cudaMemPrefetchAsync(m_hashtbl_values, m_capacity * sizeof(value_type), dev_id, stream));
       }
     }
 

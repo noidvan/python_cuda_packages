@@ -118,6 +118,10 @@ def _argparse(pattern, argv, is_flag=True, is_list=False):
                 argv.remove(arr[0])
                 return arr[0].split("=")[1], argv
 
+
+run_command("rm", "-rf", "build")
+run_command("pip", "uninstall", "MinkowskiEngine", "-y")
+
 # For cpu only build
 CPU_ONLY, argv = _argparse("--cpu_only", argv)
 FORCE_CUDA, argv = _argparse("--force_cuda", argv)
@@ -138,7 +142,7 @@ CUDA_HOME, argv = _argparse("--cuda_home", argv, False)
 BLAS, argv = _argparse("--blas", argv, False)
 BLAS_INCLUDE_DIRS, argv = _argparse("--blas_include_dirs", argv, False, is_list=True)
 BLAS_LIBRARY_DIRS, argv = _argparse("--blas_library_dirs", argv, False, is_list=True)
-MAX_COMPILATION_THREADS = 10
+MAX_COMPILATION_THREADS = 12
 
 Extension = CUDAExtension
 extra_link_args = []
@@ -146,19 +150,6 @@ include_dirs = []
 libraries = []
 CC_FLAGS = []
 NVCC_FLAGS = []
-
-# Add CCCL include path for CUDA 13 compatibility
-if CUDA_HOME:
-    cccl_include_path = os.path.join(CUDA_HOME, "targets", "x86_64-linux", "include", "cccl")
-    if os.path.exists(cccl_include_path):
-        include_dirs.append(cccl_include_path)
-else:
-    # Try common CUDA installation paths
-    for cuda_path in ["/usr/local/cuda", "/usr/local/cuda-13.0"]:
-        cccl_path = os.path.join(cuda_path, "targets", "x86_64-linux", "include", "cccl")
-        if os.path.exists(cccl_path):
-            include_dirs.append(cccl_path)
-            break
 
 if CPU_ONLY:
     print("--------------------------------")
@@ -206,12 +197,23 @@ if not (BLAS is False):  # False only when not set, str otherwise
     if not (BLAS_LIBRARY_DIRS is False):
         extra_link_args += [f"-Wl,-rpath,{BLAS_LIBRARY_DIRS}"]
 else:
-    raise ImportError(
-        ' \
+    # find the default BLAS library
+    import numpy.distutils.system_info as sysinfo
+
+    # Search blas in this order
+    for blas in BLAS_LIST:
+        if "libraries" in sysinfo.get_info(blas):
+            BLAS = blas
+            libraries += sysinfo.get_info(blas)["libraries"]
+            break
+    else:
+        # BLAS not found
+        raise ImportError(
+            ' \
 \nBLAS not found from numpy.distutils.system_info.get_info. \
 \nPlease specify BLAS with: python setup.py install --blas=openblas" \
 \nfor more information, please visit https://github.com/NVIDIA/MinkowskiEngine/wiki/Installation'
-    )
+        )
 
 print(f"\nUsing BLAS={BLAS}")
 
@@ -309,11 +311,9 @@ ext_modules = [
     Extension(
         name="MinkowskiEngineBackend._C",
         sources=[*[str(SRC_PATH / src_file) for src_file in SRC_FILES], *BIND_FILES],
+        define_macros=[('NVTX_DISABLE', None)],
         extra_compile_args={"cxx": CC_FLAGS, "nvcc": NVCC_FLAGS},
         libraries=libraries,
-        library_dirs=BLAS_LIBRARY_DIRS or [],
-        extra_link_args=[f"-L{d}" for d in (BLAS_LIBRARY_DIRS or [])],
-        runtime_library_dirs=BLAS_LIBRARY_DIRS or [],
     ),
 ]
 
@@ -330,6 +330,8 @@ setup(
     author="Christopher Choy",
     author_email="chrischoy@ai.stanford.edu",
     description="a convolutional neural network library for sparse tensors",
+    long_description=read("README.md"),
+    long_description_content_type="text/markdown",
     url="https://github.com/NVIDIA/MinkowskiEngine",
     keywords=[
         "pytorch",

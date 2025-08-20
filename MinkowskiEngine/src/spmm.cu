@@ -33,10 +33,11 @@
 #include <ATen/cuda/CUDAContext.h>
 #include <ATen/cuda/CUDAUtils.h>
 #include <c10/cuda/CUDACachingAllocator.h>
+#include <thrust/execution_policy.h>
+#include <thrust/reduce.h>
+#include <thrust/sort.h>
 #include <torch/extension.h>
 #include <torch/script.h>
-#include <thrust/sort.h>
-#include <thrust/reduce.h>
 
 namespace minkowski {
 
@@ -234,7 +235,8 @@ torch::Tensor coo_spmm(torch::Tensor const &rows, torch::Tensor const &cols,
       CUDA_CHECK(cudaMemcpy(sorted_val_ptr, values_ptr, nnz * sizeof(scalar_t),
                             cudaMemcpyDeviceToDevice));
 
-      THRUST_CHECK(thrust::sort_by_key(sorted_row_ptr,            // key begin
+      THRUST_CHECK(thrust::sort_by_key(thrust::device,            //
+                                       sorted_row_ptr,            // key begin
                                        sorted_row_ptr + nnz,      // key end
                                        thrust::make_zip_iterator( // value begin
                                            thrust::make_tuple(    //
@@ -481,7 +483,8 @@ coo_spmm_average(torch::Tensor const &rows, torch::Tensor const &cols,
     CUDA_CHECK(cudaMemcpy(sorted_col_ptr, col_indices_ptr,
                           nnz * sizeof(th_int_type), cudaMemcpyDeviceToDevice));
 
-    THRUST_CHECK(thrust::sort_by_key(sorted_row_ptr,       // key begin
+    THRUST_CHECK(thrust::sort_by_key(thrust::device,       //
+                                     sorted_row_ptr,       // key begin
                                      sorted_row_ptr + nnz, // key end
                                      sorted_col_ptr));
 
@@ -499,6 +502,7 @@ coo_spmm_average(torch::Tensor const &rows, torch::Tensor const &cols,
     try {
       // reduce by key
       auto end = thrust::reduce_by_key(
+          thrust::device,                                // policy
           sorted_row_ptr,                                // key begin
           sorted_row_ptr + nnz,                          // key end
           reinterpret_cast<scalar_t *>(ones.data_ptr()), // value begin
