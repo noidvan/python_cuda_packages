@@ -14,26 +14,37 @@ _ext_headers = glob.glob("{}/include/*".format(_ext_src_root))
 
 requirements = ["torch>=1.4"]
 
-# os.environ["TORCH_CUDA_ARCH_LIST"] = "7.0;8.0;8.6;8.7;8.9;9.0"
 
 exec(open("_version.py").read())
 
 setup(
-    name='pointnet2',
+    name="pointnet2",
     version=__version__,
     packages=find_packages(),
     install_requires=requirements,
     ext_modules=[
         CUDAExtension(
-            name='pointnet2._ext',
+            name="pointnet2._ext",
             sources=_ext_sources,
             extra_compile_args={
                 "cxx": ["-O3"],
-                "nvcc": ["-O3", "-Xfatbin", "-compress-all"],
+                "nvcc": [
+                    "-O3",
+                    "-Xfatbin",
+                    "-compress-all",
+                    "--extended-lambda",
+                    "--expt-relaxed-constexpr",
+                    "-U__CUDA_NO_BFLOAT16_CONVERSIONS__",
+                    "-U__CUDA_NO_BFLOAT16_OPERATORS__",
+                ],
             },
             include_dirs=[osp.join(_this_dir, _ext_src_root, "include")],
         )
     ],
-    cmdclass={"build_ext": BuildExtension},
+    cmdclass={
+        "build_ext": BuildExtension.with_options(
+            no_python_abi_suffix=True, use_ninja=True
+        )
+    },
     include_package_data=True,
 )

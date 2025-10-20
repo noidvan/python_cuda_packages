@@ -1,9 +1,9 @@
 # Copyright (c) Facebook, Inc. and its affiliates.
-# 
+#
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-''' Modified based on: https://github.com/erikwijmans/Pointnet2_PyTorch '''
+"""Modified based on: https://github.com/erikwijmans/Pointnet2_PyTorch"""
 from __future__ import (
     division,
     absolute_import,
@@ -12,9 +12,10 @@ from __future__ import (
     unicode_literals,
 )
 import torch
+from torch.cuda.amp import custom_fwd, custom_bwd
 from torch.autograd import Function
 import torch.nn as nn
-import pointnet2.pytorch_utils as pt_utils
+from . import pytorch_utils as pt_utils
 
 
 import builtins
@@ -47,6 +48,7 @@ class RandomDropout(nn.Module):
 
 class FurthestPointSampling(Function):
     @staticmethod
+    @custom_fwd(cast_inputs=torch.bfloat16)
     def forward(ctx, xyz, npoint):
         # type: (Any, torch.Tensor, int) -> torch.Tensor
         r"""
@@ -70,6 +72,7 @@ class FurthestPointSampling(Function):
         return fps_inds
 
     @staticmethod
+    @custom_bwd
     def backward(xyz, a=None):
         return None, None
 
@@ -79,6 +82,7 @@ furthest_point_sample = FurthestPointSampling.apply
 
 class GatherOperation(Function):
     @staticmethod
+    @custom_fwd(cast_inputs=torch.bfloat16)
     def forward(ctx, features, idx):
         # type: (Any, torch.Tensor, torch.Tensor) -> torch.Tensor
         r"""
@@ -104,6 +108,7 @@ class GatherOperation(Function):
         return _ext.gather_points(features, idx)
 
     @staticmethod
+    @custom_bwd
     def backward(ctx, grad_out):
         idx, C, N = ctx.for_backwards
 
@@ -116,6 +121,7 @@ gather_operation = GatherOperation.apply
 
 class ThreeNN(Function):
     @staticmethod
+    @custom_fwd(cast_inputs=torch.bfloat16)
     def forward(ctx, unknown, known):
         # type: (Any, torch.Tensor, torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]
         r"""
@@ -139,6 +145,7 @@ class ThreeNN(Function):
         return torch.sqrt(dist2), idx
 
     @staticmethod
+    @custom_bwd
     def backward(ctx, a=None, b=None):
         return None, None
 
@@ -148,6 +155,7 @@ three_nn = ThreeNN.apply
 
 class ThreeInterpolate(Function):
     @staticmethod
+    @custom_fwd(cast_inputs=torch.bfloat16)
     def forward(ctx, features, idx, weight):
         # type(Any, torch.Tensor, torch.Tensor, torch.Tensor) -> Torch.Tensor
         r"""
@@ -174,6 +182,7 @@ class ThreeInterpolate(Function):
         return _ext.three_interpolate(features, idx, weight)
 
     @staticmethod
+    @custom_bwd
     def backward(ctx, grad_out):
         # type: (Any, torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
         r"""
@@ -205,6 +214,7 @@ three_interpolate = ThreeInterpolate.apply
 
 class GroupingOperation(Function):
     @staticmethod
+    @custom_fwd(cast_inputs=torch.bfloat16)
     def forward(ctx, features, idx):
         # type: (Any, torch.Tensor, torch.Tensor) -> torch.Tensor
         r"""
@@ -229,6 +239,7 @@ class GroupingOperation(Function):
         return _ext.group_points(features, idx)
 
     @staticmethod
+    @custom_bwd
     def backward(ctx, grad_out):
         # type: (Any, torch.tensor) -> Tuple[torch.Tensor, torch.Tensor]
         r"""
@@ -256,6 +267,7 @@ grouping_operation = GroupingOperation.apply
 
 class BallQuery(Function):
     @staticmethod
+    @custom_fwd(cast_inputs=torch.bfloat16)
     def forward(ctx, radius, nsample, xyz, new_xyz):
         # type: (Any, float, int, torch.Tensor, torch.Tensor) -> torch.Tensor
         r"""
@@ -281,6 +293,7 @@ class BallQuery(Function):
         return inds
 
     @staticmethod
+    @custom_bwd
     def backward(ctx, a=None):
         return None, None, None, None
 
@@ -300,7 +313,16 @@ class QueryAndGroup(nn.Module):
         Maximum number of features to gather in the ball
     """
 
-    def __init__(self, radius, nsample, use_xyz=True, ret_grouped_xyz=False, normalize_xyz=False, sample_uniformly=False, ret_unique_cnt=False):
+    def __init__(
+        self,
+        radius,
+        nsample,
+        use_xyz=True,
+        ret_grouped_xyz=False,
+        normalize_xyz=False,
+        sample_uniformly=False,
+        ret_unique_cnt=False,
+    ):
         # type: (QueryAndGroup, float, int, bool) -> None
         super(QueryAndGroup, self).__init__()
         self.radius, self.nsample, self.use_xyz = radius, nsample, use_xyz
@@ -309,7 +331,7 @@ class QueryAndGroup(nn.Module):
         self.sample_uniformly = sample_uniformly
         self.ret_unique_cnt = ret_unique_cnt
         if self.ret_unique_cnt:
-            assert(self.sample_uniformly)
+            assert self.sample_uniformly
 
     def forward(self, xyz, new_xyz, features=None):
         # type: (QueryAndGroup, torch.Tensor. torch.Tensor, torch.Tensor) -> Tuple[Torch.Tensor]
@@ -337,10 +359,11 @@ class QueryAndGroup(nn.Module):
                     unique_ind = torch.unique(idx[i_batch, i_region, :])
                     num_unique = unique_ind.shape[0]
                     unique_cnt[i_batch, i_region] = num_unique
-                    sample_ind = torch.randint(0, num_unique, (self.nsample - num_unique,), dtype=torch.long)
+                    sample_ind = torch.randint(
+                        0, num_unique, (self.nsample - num_unique,), dtype=torch.long
+                    )
                     all_ind = torch.cat((unique_ind, unique_ind[sample_ind]))
                     idx[i_batch, i_region, :] = all_ind
-
 
         xyz_trans = xyz.transpose(1, 2).contiguous()
         grouped_xyz = grouping_operation(xyz_trans, idx)  # (B, 3, npoint, nsample)
